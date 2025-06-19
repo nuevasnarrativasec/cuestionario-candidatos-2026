@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Cuestionario Político</title>
+</head>
+<body>
+  <h1>Simulador de envío a Apps Script</h1>
+
+  <p>Este botón envía respuestas simuladas al backend de Apps Script y muestra la respuesta.</p>
+
+  <button onclick="enviarRespuestas()">Enviar respuestas</button>
+
+  <pre id="resultado" style="background:#eee; padding:1em; margin-top:1em;"></pre>
+
+  <script>
+    async function enviarRespuestas() {
+      const respuestas = [2, 1, 0, -1, 2, 0, -2, 1, -1, 2]; // ejemplo
+      const endpoint = "https://script.google.com/macros/s/AKfycbzellCorkpDVzGX_VAFYnyj1v172u9xLDXyMoMHgFH_yJ-s3KPtx22CAydGvU64sg4kbg/exec";
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ respuestas })
+      });
+
+      const data = await response.json();
+      document.getElementById("resultado").textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>
