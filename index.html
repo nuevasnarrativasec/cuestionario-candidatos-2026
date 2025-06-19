@@ -15,20 +15,23 @@
 
   <script>
     async function enviarRespuestas() {
-      const respuestas = [2, 1, 0, -1, 2, 0, -2, 1, -1, 2]; // ejemplo
-      const endpoint = "https://script.google.com/macros/s/AKfycbxr34gNoGCXJMZsC2l61E5DGQA-uoACvEiS1tIPf0wvoZ-0xj0SsbMQf-LVi_06Kjjiyg/exec";
+        const respuestas = [2, 1, 0, -1, 2, 0, -2, 1, -1, 2];
+        const query = respuestas.join(",");
+        const endpoint = "https://script.google.com/macros/s/AKfycbzIRaUchsyPj1sBRH7t86pYhqdz4sAwR4VHNyVRn-vC2uYlg0eKU-tyau535YajmHwT3A/exec?respuestas=" + encodeURIComponent(query);
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ respuestas })
-      });
+        try {
+        const res = await fetch(endpoint);
+        if (!res.ok) throw new Error("Error en la respuesta del servidor");
 
-      const data = await response.json();
-      document.getElementById("resultado").textContent = JSON.stringify(data, null, 2);
+        const data = await res.json();
+        console.log(data);
+        document.getElementById("resultado").textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+        console.error("Error al enviar respuestas:", error);
+        document.getElementById("resultado").textContent = "Error al obtener respuesta del servidor.";
+        }
     }
-  </script>
+    </script>
+
 </body>
 </html>
