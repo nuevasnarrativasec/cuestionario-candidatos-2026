@@ -3,35 +3,274 @@
 <head>
   <meta charset="UTF-8">
   <title>Test Cuestionario Político</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    button { display: block; margin: 5px 0; padding: 8px 12px; font-size: 16px; }
+    table { border-collapse: collapse; margin-top: 2em; }
+    td, th { padding: 6px 10px; border: 1px solid #ccc; text-align: center; }
+  </style>
+
 </head>
 <body>
-  <h1>Simulador de envío a Apps Script</h1>
+    <h1>Cuestionario candidatos</h1>
 
-  <p>Este botón envía respuestas simuladas al backend de Apps Script y muestra la respuesta.</p>
 
-  <button onclick="enviarRespuestas()">Enviar respuestas</button>
+    <div id="quizContainer">
+        <div id="pregunta"></div>
+        <div id="opciones"></div>
+        <div id="progreso" style="margin-top: 10px;"></div>
+    </div>
 
-  <pre id="resultado" style="background:#eee; padding:1em; margin-top:1em;"></pre>
+    <div id="resultados" style="display:none;">
+        <div id="mejorCandidato" style="display: none; text-align: center; margin: 2em 0;">
+        <h2>Este es el candidato más cercano a tus posiciones</h2>
+        <div id="candidatoDestacado" style="display: flex; justify-content: center; align-items: center; gap: 1em;">
+            <img id="fotoCandidato" src="" alt="Foto" style="width: 80px; height: 80px; border-radius: 50%;">
+            <div>
+            <h3 id="nombreCandidato" style="margin: 0;"></h3>
+            <p id="partidoCandidato" style="margin: 0; font-style: italic;"></p>
+            </div>
+        </div>
+        </div>
+
+        <div id="rankingCoincidencias" style="margin-top: 3em;">
+        <h2>Tu ranking de coincidencias</h2>
+        <div id="listaCandidatos"></div>
+        </div>
+
+        <h2>Resultado en JSON</h2>
+        <pre id="resultado" style="background:#eee; padding:1em;"></pre>
+
+        <h2>Brújula política</h2>
+        <canvas id="brujula" width="400" height="400"></canvas>
+
+        <h2>Comparación por pregunta</h2>
+        <div id="tablaComparativa"></div>
+    </div>
+
+    
 
   <script>
+    const preguntas = [
+        "Debemos reducir el IGV",
+        "El Estado debe garantizar educación universitaria gratuita",
+        "Las empresas estatales deberían privatizarse",
+        "El matrimonio igualitario debe estar garantizado por ley",
+        "El Estado debe recortar el gasto público",
+        "El aborto debería estar legalizado en todos los casos",
+        "El salario mínimo debe aumentar aunque afecte a las empresas",
+        "Las fuerzas armadas deben intervenir en seguridad ciudadana",
+        "Deberíamos firmar más tratados de libre comercio",
+        "Las iglesias deberían influir menos en las políticas públicas"
+    ];
+
+    const opciones = [
+        { texto: "Muy de acuerdo", valor: 2 },
+        { texto: "De acuerdo", valor: 1 },
+        { texto: "Depende", valor: 0 },
+        { texto: "En desacuerdo", valor: -1 },
+        { texto: "Muy en desacuerdo", valor: -2 }
+    ];
+
+    const datosCandidatos = {
+        "Keiko Fujimori": { imagen: "../img/keiko.png", partido: "Fuerza Popular" },
+        "Martín Vizcarra": { imagen: "../img/vizcarra.png", partido: "Perú Primero" },
+        "César Acuña": { imagen: "../img/acuna.png", partido: "APP" },
+        "Rafael López Aliaga": { imagen: "../img/lopez.png", partido: "Renovación Popular" }
+    };
+
+    let respuestas = [];
+    let preguntaActual = 0;
+
+    function mostrarPregunta() {
+        const contenedor = document.getElementById("pregunta");
+        const opcionesCont = document.getElementById("opciones");
+        const progreso = document.getElementById("progreso");
+
+        contenedor.innerHTML = `<h3>${preguntas[preguntaActual]}</h3><p>¿Qué opinas?</p>`;
+        opcionesCont.innerHTML = "";
+
+        opciones.forEach(op => {
+            const btn = document.createElement("button");
+            btn.textContent = op.texto;
+            btn.onclick = () => guardarRespuesta(op.valor);
+            opcionesCont.appendChild(btn);
+        });
+
+        progreso.textContent = `Pregunta ${preguntaActual + 1} / ${preguntas.length}`;
+    }
+
+    function guardarRespuesta(valor) {
+        respuestas.push(valor);
+        preguntaActual++;
+        if (preguntaActual < preguntas.length) {
+            mostrarPregunta();
+        } else {
+        document.getElementById("quizContainer").style.display = "none";
+            enviarRespuestas();
+        }
+    }
+
     async function enviarRespuestas() {
-        const respuestas = [2, 1, 0, -1, 2, 0, -2, 1, -1, 2];
         const query = respuestas.join(",");
         const endpoint = "https://script.google.com/macros/s/AKfycbzIRaUchsyPj1sBRH7t86pYhqdz4sAwR4VHNyVRn-vC2uYlg0eKU-tyau535YajmHwT3A/exec?respuestas=" + encodeURIComponent(query);
 
         try {
-        const res = await fetch(endpoint);
-        if (!res.ok) throw new Error("Error en la respuesta del servidor");
+            const res = await fetch(endpoint);
+            const data = await res.json();
 
-        const data = await res.json();
-        console.log(data);
-        document.getElementById("resultado").textContent = JSON.stringify(data, null, 2);
+            const mejor = data.candidatos[0];
+            const info = datosCandidatos[mejor.nombre];
+            document.getElementById("fotoCandidato").src = info.imagen;
+            document.getElementById("nombreCandidato").textContent = mejor.nombre;
+            document.getElementById("partidoCandidato").textContent = info.partido || "";
+            document.getElementById("mejorCandidato").style.display = "block";
+
+            renderRanking(data.candidatos);
+
+            document.getElementById("resultados").style.display = "block";
+            document.getElementById("resultado").textContent = JSON.stringify(data, null, 2);
+            renderGrafico(data);
+            renderTablaComparativa(data.comparacion);
         } catch (error) {
-        console.error("Error al enviar respuestas:", error);
-        document.getElementById("resultado").textContent = "Error al obtener respuesta del servidor.";
+            document.getElementById("resultado").textContent = "Error al obtener respuesta.";
         }
     }
-    </script>
+
+    function renderRanking(candidatosOrdenados) {
+        const contenedor = document.getElementById("listaCandidatos");
+        contenedor.innerHTML = "";
+
+        candidatosOrdenados.forEach((cand, index) => {
+            const info = datosCandidatos[cand.nombre] || {};
+            const partido = info.partido || "";
+            const imagen = info.imagen || "https://via.placeholder.com/60";
+
+            const div = document.createElement("div");
+            div.style.display = "flex";
+            div.style.alignItems = "center";
+            div.style.borderBottom = "1px solid #ddd";
+            div.style.padding = "10px";
+
+            div.innerHTML = `
+            <div style="font-weight:bold; width: 30px;">${index + 1}°</div>
+            <img src="${imagen}" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 10px;">
+            <div>
+                <div style="font-weight: bold;">${cand.nombre}</div>
+                <div style="font-style: italic;">${partido}</div>
+            </div>
+            `;
+
+            contenedor.appendChild(div);
+        });
+    }
+
+    function renderGrafico(data) {
+        const ctx = document.getElementById("brujula").getContext("2d");
+        const imagenesCandidatos = datosCandidatos;
+        const puntos = [
+            {
+                x: data.usuario.x, y: data.usuario.y,
+                label: "Tú", color: "black", tipo: "usuario"
+            },
+            ...data.candidatos.map(c => ({
+                x: c.x, y: c.y, label: c.nombre,
+                imageUrl: imagenesCandidatos[c.nombre].imagen,
+                tipo: "candidato"
+            }))
+        ];
+
+        if (window.miGrafico) window.miGrafico.destroy();
+
+        Promise.all(puntos.map(p => {
+            if (p.tipo === "candidato") {
+                return new Promise(resolve => {
+                    const img = new Image();
+                    img.src = p.imageUrl;
+                    img.onload = () => { p.image = img; resolve(p); };
+                });
+            } else return Promise.resolve(p);
+        })).then(puntosConImg => {
+        window.miGrafico = new Chart(ctx, {
+            type: "scatter",
+            data: {
+            datasets: puntosConImg.map(p => ({
+                    label: p.label,
+                    data: [{ x: p.x, y: p.y }],
+                    backgroundColor: p.tipo === "usuario" ? p.color : "transparent",
+                    borderColor: "transparent",
+                    pointStyle: p.tipo === "usuario" ? "circle" : p.image,
+                    pointRadius: p.tipo === "usuario" ? 8 : 20
+                }))
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { min: -5, max: 5, title: { display: true, text: "Eje económico" }, grid: { color: "#ddd" } },
+                    y: { min: -5, max: 5, title: { display: true, text: "Eje social" }, grid: { color: "#ddd" } }
+                },
+                animation: false
+            },
+            plugins: [{
+                id: 'ejesCruce',
+                afterDraw(chart) {
+                    const { ctx, chartArea } = chart;
+                    const midX = (chartArea.left + chartArea.right) / 2;
+                    const midY = (chartArea.top + chartArea.bottom) / 2;
+                    ctx.save();
+                    ctx.strokeStyle = "#999";
+                    ctx.beginPath(); ctx.moveTo(midX, chartArea.top); ctx.lineTo(midX, chartArea.bottom); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(chartArea.left, midY); ctx.lineTo(chartArea.right, midY); ctx.stroke();
+                    ctx.fillStyle = "#444"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+                    ctx.fillText("Conservador", midX, chartArea.top + 10);
+                    ctx.fillText("Progresista", midX, chartArea.bottom - 5);
+                    ctx.fillText("Izquierda", chartArea.left + 30, midY - 5);
+                    ctx.fillText("Derecha", chartArea.right - 30, midY - 5);
+                    ctx.restore();
+                }
+            }]
+        });
+    });
+    }
+
+    function renderTablaComparativa(comparacion) {
+        const escalaRespuesta = {
+            "2": "Muy de acuerdo", "1": "De acuerdo", "0": "Depende",
+            "-1": "En desacuerdo", "-2": "Muy en desacuerdo"
+        };
+        let html = "<table><thead><tr><th>Pregunta</th><th>Tú</th>";
+        const candidatos = comparacion[0].respuestasCandidatos.map(c => c.nombre);
+        candidatos.forEach(n => html += `<th>${n}</th>`);
+        html += "</tr></thead><tbody>";
+
+        comparacion.forEach(p => {
+            html += `<tr><td>${p.pregunta}</td><td><strong>${escalaRespuesta[p.usuario]}</strong></td>`;
+            p.respuestasCandidatos.forEach(rc => {
+                const texto = escalaRespuesta[rc.respuesta];
+                const color = getColorMatch(p.usuario, rc.respuesta);
+                const fuente = rc.link ? ` <a href='${rc.link}' target='_blank'>📎</a>` : "";
+                html += `<td style='background:${color};'>${texto}${fuente}</td>`;
+            });
+            html += "</tr>";
+        });
+        html += "</tbody></table>";
+        document.getElementById("tablaComparativa").innerHTML = html;
+    }
+
+    function getColorMatch(a, b) {
+        const diff = Math.abs(a - b);
+        if (diff === 0) return "#c8f7c5";
+        if (diff === 1) return "#f4f4b2";
+        if (diff >= 2) return "#f8c6c6";
+        return "#fff";
+    }
+
+    mostrarPregunta();
+ 
+</script>
+
 
 </body>
 </html>
