@@ -10,6 +10,16 @@
     button { display: block; margin: 5px 0; padding: 8px 12px; font-size: 16px; }
     table { border-collapse: collapse; margin-top: 2em; }
     td, th { padding: 6px 10px; border: 1px solid #ccc; text-align: center; }
+    .panel-comparacion table {
+        margin-top: 1em;
+        font-size: 14px;
+        background: #fafafa;
+    }
+    .panel-comparacion h4 {
+        margin-bottom: 0.5em;
+    }
+
+  
   </style>
 
 </head>
@@ -36,8 +46,8 @@
         </div>
 
         <div id="rankingCoincidencias" style="margin-top: 3em;">
-        <h2>Tu ranking de coincidencias</h2>
-        <div id="listaCandidatos"></div>
+            <h2>Tu ranking de coincidencias</h2>
+            <div id="listaCandidatos"></div>
         </div>
 
         <h2>Resultado en JSON</h2>
@@ -79,6 +89,11 @@
         "Martín Vizcarra": { imagen: "../img/vizcarra.png", partido: "Perú Primero" },
         "César Acuña": { imagen: "../img/acuna.png", partido: "APP" },
         "Rafael López Aliaga": { imagen: "../img/lopez.png", partido: "Renovación Popular" }
+    };
+
+    const escalaRespuesta = {
+        "2": "Muy de acuerdo", "1": "De acuerdo", "0": "Depende",
+        "-1": "En desacuerdo", "-2": "Muy en desacuerdo"
     };
 
     let respuestas = [];
@@ -128,8 +143,9 @@
             document.getElementById("partidoCandidato").textContent = info.partido || "";
             document.getElementById("mejorCandidato").style.display = "block";
 
-            renderRanking(data.candidatos);
+            window.ultimaComparacion = data.comparacion;
 
+            renderRanking(data.candidatos);
             document.getElementById("resultados").style.display = "block";
             document.getElementById("resultado").textContent = JSON.stringify(data, null, 2);
             renderGrafico(data);
@@ -147,25 +163,68 @@
             const info = datosCandidatos[cand.nombre] || {};
             const partido = info.partido || "";
             const imagen = info.imagen || "https://via.placeholder.com/60";
+            const idContenedor = `comparacion-${index}`;
 
             const div = document.createElement("div");
-            div.style.display = "flex";
-            div.style.alignItems = "center";
-            div.style.borderBottom = "1px solid #ddd";
-            div.style.padding = "10px";
-
             div.innerHTML = `
-            <div style="font-weight:bold; width: 30px;">${index + 1}°</div>
-            <img src="${imagen}" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 10px;">
-            <div>
+            <div style="display:flex; align-items:center; border-bottom:1px solid #ddd; padding:10px;">
+                <div style="font-weight:bold; width: 30px;">${index + 1}°</div>
+                <img src="${imagen}" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 10px;">
+                <div style="flex-grow:1;">
                 <div style="font-weight: bold;">${cand.nombre}</div>
                 <div style="font-style: italic;">${partido}</div>
+                </div>
+                <button onclick="toggleRespuestas('${cand.nombre}', '${idContenedor}')" style="margin-left: auto;">Ver respuestas</button>
             </div>
+            <div id="${idContenedor}" class="panel-comparacion" style="display:none; padding-left: 50px;"></div>
             `;
-
             contenedor.appendChild(div);
         });
     }
+
+    function toggleRespuestas(nombreCandidato, contenedorId) {
+        // Ocultar cualquier otro panel abierto
+        document.querySelectorAll(".panel-comparacion").forEach(p => {
+            if (p.id !== contenedorId) p.style.display = "none";
+        });
+
+        const panel = document.getElementById(contenedorId);
+        const comparacion = window.ultimaComparacion || [];
+        const candidato = comparacion[0].respuestasCandidatos.find(c => c.nombre === nombreCandidato);
+        if (!candidato || !panel) return;
+
+        // Si ya está visible, lo ocultamos
+        if (panel.style.display === "block") {
+            panel.style.display = "none";
+            panel.innerHTML = "";
+            return;
+        }
+
+        // Mostrar panel
+        panel.style.display = "block";
+
+        let html = `<h4>Comparación con <strong>${nombreCandidato}</strong></h4>`;
+        html += "<table><thead><tr><th>Pregunta</th><th>Tú</th><th>" + nombreCandidato + "</th></tr></thead><tbody>";
+
+        comparacion.forEach(p => {
+            const rCandidato = p.respuestasCandidatos.find(r => r.nombre === nombreCandidato);
+            const textoUsuario = escalaRespuesta[p.usuario];
+            const textoCandidato = escalaRespuesta[rCandidato.respuesta];
+            const link = rCandidato.link ? ` <a href="${rCandidato.link}" target="_blank">📎</a>` : "";
+
+            const color = getColorMatch(p.usuario, rCandidato.respuesta);
+
+            html += `<tr>
+            <td>${p.pregunta}</td>
+            <td>${textoUsuario}</td>
+            <td style="background:${color};">${textoCandidato}${link}</td>
+            </tr>`;
+        });
+
+        html += "</tbody></table>";
+        panel.innerHTML = html;
+    }
+
 
     function renderGrafico(data) {
         const ctx = document.getElementById("brujula").getContext("2d");
@@ -236,10 +295,7 @@
     }
 
     function renderTablaComparativa(comparacion) {
-        const escalaRespuesta = {
-            "2": "Muy de acuerdo", "1": "De acuerdo", "0": "Depende",
-            "-1": "En desacuerdo", "-2": "Muy en desacuerdo"
-        };
+        
         let html = "<table><thead><tr><th>Pregunta</th><th>Tú</th>";
         const candidatos = comparacion[0].respuestasCandidatos.map(c => c.nombre);
         candidatos.forEach(n => html += `<th>${n}</th>`);
