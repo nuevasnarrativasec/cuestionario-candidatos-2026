@@ -26,7 +26,6 @@
 <body>
     <h1>Cuestionario candidatos</h1>
 
-
     <div id="quizContainer">
         <div id="pregunta"></div>
         <div id="opciones"></div>
@@ -48,19 +47,15 @@
         <div id="rankingCoincidencias" style="margin-top: 3em;">
             <h2>Tu ranking de coincidencias</h2>
             <div id="listaCandidatos"></div>
-        </div>
-
-        <h2>Resultado en JSON</h2>
-        <pre id="resultado" style="background:#eee; padding:1em;"></pre>
+        </div>        
 
         <h2>Brújula política</h2>
         <canvas id="brujula" width="400" height="400"></canvas>
 
         <h2>Comparación por pregunta</h2>
         <div id="tablaComparativa"></div>
+        <button id="btnReiniciar" style="display:none; margin-top:2em;">Reiniciar test</button>
     </div>
-
-    
 
   <script>
     const preguntas = [
@@ -96,10 +91,20 @@
         "-1": "En desacuerdo", "-2": "Muy en desacuerdo"
     };
 
+    let puntosOtrosUsuarios = [];
     let respuestas = [];
     let preguntaActual = 0;
 
     function mostrarPregunta() {
+        // Siempre reinicia si es la primera pregunta
+        if (preguntaActual === 0) {
+                respuestas = [];
+                preguntaActual = 0; // <-- Asegura el reinicio
+                document.getElementById("resultados").style.display = "none";
+                document.getElementById("btnReiniciar").style.display = "none";
+                document.getElementById("quizContainer").style.display = "block";
+        }
+
         const contenedor = document.getElementById("pregunta");
         const opcionesCont = document.getElementById("opciones");
         const progreso = document.getElementById("progreso");
@@ -118,40 +123,90 @@
     }
 
     function guardarRespuesta(valor) {
+        if (respuestas.length >= preguntas.length) return; // Evita exceso
         respuestas.push(valor);
         preguntaActual++;
         if (preguntaActual < preguntas.length) {
             mostrarPregunta();
         } else {
-        document.getElementById("quizContainer").style.display = "none";
+            document.getElementById("quizContainer").style.display = "none";
             enviarRespuestas();
         }
     }
 
     async function enviarRespuestas() {
         const query = respuestas.join(",");
-        const endpoint = "https://script.google.com/macros/s/AKfycbzIRaUchsyPj1sBRH7t86pYhqdz4sAwR4VHNyVRn-vC2uYlg0eKU-tyau535YajmHwT3A/exec?respuestas=" + encodeURIComponent(query);
+        const endpoint = "https://script.google.com/macros/s/AKfycbxrHYuYRTjuVHqBoDnFCkQsK8RHTjsAwKyTQZfwfEu0Zttqgb0E2ZSkBTAmf54cyAbcjg/exec?respuestas=" + encodeURIComponent(query);
 
         try {
             const res = await fetch(endpoint);
             const data = await res.json();
 
-            const mejor = data.candidatos[0];
+            console.log("Respuesta completa:", data);
+
+            // Validar que la respuesta tenga la estructura esperada
+            if (!data || !data.candidatos || !Array.isArray(data.candidatos) || data.candidatos.length === 0) {
+                throw new Error("No se encontraron candidatos en la respuesta.");
+            }
+
+            // Filtrar candidatos válidos (que tengan nombre y estén en datosCandidatos)
+            const candidatosValidos = data.candidatos.filter(candidato => 
+                candidato && 
+                candidato.nombre && 
+                candidato.nombre.trim() !== "" && 
+                datosCandidatos[candidato.nombre]
+            );
+
+            if (candidatosValidos.length === 0) {
+                throw new Error("No se encontraron candidatos válidos.");
+            }
+
+            // Usar candidatos válidos
+            const mejor = candidatosValidos[0];
+            console.log("Nombre del mejor candidato:", mejor.nombre);
             const info = datosCandidatos[mejor.nombre];
+
             document.getElementById("fotoCandidato").src = info.imagen;
             document.getElementById("nombreCandidato").textContent = mejor.nombre;
             document.getElementById("partidoCandidato").textContent = info.partido || "";
             document.getElementById("mejorCandidato").style.display = "block";
+            document.getElementById("btnReiniciar").style.display = "block";
 
             window.ultimaComparacion = data.comparacion;
-
-            renderRanking(data.candidatos);
+            renderRanking(candidatosValidos); // Usar candidatos válidos
             document.getElementById("resultados").style.display = "block";
-            document.getElementById("resultado").textContent = JSON.stringify(data, null, 2);
+
+            const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+            // Guardar puntos del usuario y cargar puntos de otros usuarios
+            if (data.usuario && data.usuario.x !== undefined && data.usuario.y !== undefined) {
+                try {
+                    // Guardar punto del usuario actual en la hoja "puntos"
+                    await fetch("https://script.google.com/macros/s/AKfycbxrHYuYRTjuVHqBoDnFCkQsK8RHTjsAwKyTQZfwfEu0Zttqgb0E2ZSkBTAmf54cyAbcjg/exec", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: `accion=guardarPunto&x=${data.usuario.x}&y=${data.usuario.y}`
+                    });
+
+                    // Cargar puntos de otros usuarios
+                    const puntosRes = await fetch("https://script.google.com/macros/s/AKfycbxrHYuYRTjuVHqBoDnFCkQsK8RHTjsAwKyTQZfwfEu0Zttqgb0E2ZSkBTAmf54cyAbcjg/exec?accion=obtenerPuntos");
+                    const puntosData = await puntosRes.json();
+                    
+                    if (puntosData && Array.isArray(puntosData.puntos)) {
+                        puntosOtrosUsuarios = puntosData.puntos;
+                    }
+                } catch (error) {
+                    console.warn("Error al manejar puntos de usuarios:", error);
+                }
+            } else {
+                console.log("Modo local: omitiendo registro y carga de puntos de otros usuarios.");
+            }
+
             renderGrafico(data);
             renderTablaComparativa(data.comparacion);
         } catch (error) {
-            document.getElementById("resultado").textContent = "Error al obtener respuesta.";
+            console.error("Error al obtener respuesta:", error);
+            alert("Hubo un error al procesar las respuestas. Por favor, intenta nuevamente.");
         }
     }
 
@@ -160,7 +215,13 @@
         contenedor.innerHTML = "";
 
         candidatosOrdenados.forEach((cand, index) => {
-            const info = datosCandidatos[cand.nombre] || {};
+            // Validar que el candidato tenga nombre y esté en datosCandidatos
+            if (!cand || !cand.nombre || !datosCandidatos[cand.nombre]) {
+                console.warn("Candidato inválido omitido:", cand);
+                return;
+            }
+
+            const info = datosCandidatos[cand.nombre];
             const partido = info.partido || "";
             const imagen = info.imagen || "https://via.placeholder.com/60";
             const idContenedor = `comparacion-${index}`;
@@ -169,7 +230,8 @@
             div.innerHTML = `
             <div style="display:flex; align-items:center; border-bottom:1px solid #ddd; padding:10px;">
                 <div style="font-weight:bold; width: 30px;">${index + 1}°</div>
-                <img src="${imagen}" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 10px;">
+                <img src="${imagen}" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 10px;" 
+                     onerror="this.src='https://via.placeholder.com/50'">
                 <div style="flex-grow:1;">
                 <div style="font-weight: bold;">${cand.nombre}</div>
                 <div style="font-style: italic;">${partido}</div>
@@ -183,35 +245,33 @@
     }
 
     function toggleRespuestas(nombreCandidato, contenedorId) {
-        // Ocultar cualquier otro panel abierto
         document.querySelectorAll(".panel-comparacion").forEach(p => {
-            if (p.id !== contenedorId) p.style.display = "none";
+        if (p.id !== contenedorId) p.style.display = "none";
         });
 
         const panel = document.getElementById(contenedorId);
         const comparacion = window.ultimaComparacion || [];
-        const candidato = comparacion[0].respuestasCandidatos.find(c => c.nombre === nombreCandidato);
+        const candidato = comparacion[0]?.respuestasCandidatos?.find(c => c.nombre === nombreCandidato);
         if (!candidato || !panel) return;
 
-        // Si ya está visible, lo ocultamos
         if (panel.style.display === "block") {
             panel.style.display = "none";
             panel.innerHTML = "";
             return;
         }
 
-        // Mostrar panel
         panel.style.display = "block";
 
         let html = `<h4>Comparación con <strong>${nombreCandidato}</strong></h4>`;
-        html += "<table><thead><tr><th>Pregunta</th><th>Tú</th><th>" + nombreCandidato + "</th></tr></thead><tbody>";
+        html += "<table><thead><tr><th>Pregunta</th><th>Vos</th><th>" + nombreCandidato + "</th></tr></thead><tbody>";
 
         comparacion.forEach(p => {
             const rCandidato = p.respuestasCandidatos.find(r => r.nombre === nombreCandidato);
+            if (!rCandidato) return;
+            
             const textoUsuario = escalaRespuesta[p.usuario];
             const textoCandidato = escalaRespuesta[rCandidato.respuesta];
             const link = rCandidato.link ? ` <a href="${rCandidato.link}" target="_blank">📎</a>` : "";
-
             const color = getColorMatch(p.usuario, rCandidato.respuesta);
 
             html += `<tr>
@@ -229,85 +289,122 @@
     function renderGrafico(data) {
         const ctx = document.getElementById("brujula").getContext("2d");
         const imagenesCandidatos = datosCandidatos;
+        
+        // Crear array de puntos incluyendo usuario, candidatos y otros usuarios
         const puntos = [
             {
                 x: data.usuario.x, y: data.usuario.y,
-                label: "Tú", color: "black", tipo: "usuario"
-            },
-            ...data.candidatos.map(c => ({
+                label: "Tú", color: "red", tipo: "usuario", size: 12
+            }
+        ];
+
+        // Agregar candidatos válidos
+        const candidatosValidos = data.candidatos.filter(c => 
+            c && c.nombre && datosCandidatos[c.nombre]
+        );
+        
+        candidatosValidos.forEach(c => {
+            puntos.push({
                 x: c.x, y: c.y, label: c.nombre,
                 imageUrl: imagenesCandidatos[c.nombre].imagen,
-                tipo: "candidato"
-            }))
-        ];
+                tipo: "candidato", size: 20
+            });
+        });
+
+        // Agregar puntos de otros usuarios (puntos grises)
+        if (Array.isArray(puntosOtrosUsuarios)) {
+            puntosOtrosUsuarios.forEach((punto, index) => {
+                if (punto && typeof punto.x === 'number' && typeof punto.y === 'number') {
+                    puntos.push({
+                        x: punto.x, y: punto.y,
+                        label: `Usuario ${index + 1}`,
+                        color: "rgba(128, 128, 128, 0.6)",
+                        tipo: "otroUsuario", size: 4
+                    });
+                }
+            });
+        }
 
         if (window.miGrafico) window.miGrafico.destroy();
 
+        // Cargar imágenes de candidatos
         Promise.all(puntos.map(p => {
             if (p.tipo === "candidato") {
                 return new Promise(resolve => {
                     const img = new Image();
                     img.src = p.imageUrl;
                     img.onload = () => { p.image = img; resolve(p); };
+                    img.onerror = () => resolve(p); // Si no carga la imagen, continúa
                 });
             } else return Promise.resolve(p);
         })).then(puntosConImg => {
-        window.miGrafico = new Chart(ctx, {
-            type: "scatter",
-            data: {
-            datasets: puntosConImg.map(p => ({
-                    label: p.label,
-                    data: [{ x: p.x, y: p.y }],
-                    backgroundColor: p.tipo === "usuario" ? p.color : "transparent",
-                    borderColor: "transparent",
-                    pointStyle: p.tipo === "usuario" ? "circle" : p.image,
-                    pointRadius: p.tipo === "usuario" ? 8 : 20
-                }))
-            },
-            options: {
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { min: -5, max: 5, title: { display: true, text: "Eje económico" }, grid: { color: "#ddd" } },
-                    y: { min: -5, max: 5, title: { display: true, text: "Eje social" }, grid: { color: "#ddd" } }
+            window.miGrafico = new Chart(ctx, {
+                type: "scatter",
+                data: {
+                    datasets: puntosConImg.map(p => ({
+                        label: p.label,
+                        data: [{ x: p.x, y: p.y }],
+                        backgroundColor: p.color || "transparent",
+                        borderColor: p.tipo === "otroUsuario" ? p.color : "transparent",
+                        pointStyle: p.tipo === "candidato" && p.image ? p.image : "circle",
+                        pointRadius: p.size || 8
+                    }))
                 },
-                animation: false
-            },
-            plugins: [{
-                id: 'ejesCruce',
-                afterDraw(chart) {
-                    const { ctx, chartArea } = chart;
-                    const midX = (chartArea.left + chartArea.right) / 2;
-                    const midY = (chartArea.top + chartArea.bottom) / 2;
-                    ctx.save();
-                    ctx.strokeStyle = "#999";
-                    ctx.beginPath(); ctx.moveTo(midX, chartArea.top); ctx.lineTo(midX, chartArea.bottom); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(chartArea.left, midY); ctx.lineTo(chartArea.right, midY); ctx.stroke();
-                    ctx.fillStyle = "#444"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
-                    ctx.fillText("Conservador", midX, chartArea.top + 10);
-                    ctx.fillText("Progresista", midX, chartArea.bottom - 5);
-                    ctx.fillText("Izquierda", chartArea.left + 30, midY - 5);
-                    ctx.fillText("Derecha", chartArea.right - 30, midY - 5);
-                    ctx.restore();
-                }
-            }]
+                options: {
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { min: -5, max: 5, title: { display: true, text: "Eje económico" }, grid: { color: "#ddd" } },
+                        y: { min: -5, max: 5, title: { display: true, text: "Eje social" }, grid: { color: "#ddd" } }
+                    },
+                    animation: false
+                },
+                plugins: [{
+                    id: 'ejesCruce',
+                    afterDraw(chart) {
+                        const { ctx, chartArea } = chart;
+                        const midX = (chartArea.left + chartArea.right) / 2;
+                        const midY = (chartArea.top + chartArea.bottom) / 2;
+                        ctx.save();
+                        ctx.strokeStyle = "#999";
+                        ctx.beginPath(); ctx.moveTo(midX, chartArea.top); ctx.lineTo(midX, chartArea.bottom); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(chartArea.left, midY); ctx.lineTo(chartArea.right, midY); ctx.stroke();
+                        ctx.fillStyle = "#444"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+                        ctx.fillText("Conservador", midX, chartArea.top + 10);
+                        ctx.fillText("Progresista", midX, chartArea.bottom - 5);
+                        ctx.fillText("Izquierda", chartArea.left + 30, midY - 5);
+                        ctx.fillText("Derecha", chartArea.right - 30, midY - 5);
+                        ctx.restore();
+                    }
+                }]
+            });
         });
-    });
     }
 
     function renderTablaComparativa(comparacion) {
+        if (!comparacion || !Array.isArray(comparacion) || comparacion.length === 0) {
+            document.getElementById("tablaComparativa").innerHTML = "<p>No hay datos de comparación disponibles.</p>";
+            return;
+        }
         
         let html = "<table><thead><tr><th>Pregunta</th><th>Tú</th>";
-        const candidatos = comparacion[0].respuestasCandidatos.map(c => c.nombre);
+        const candidatos = comparacion[0].respuestasCandidatos
+            .filter(c => c && c.nombre && datosCandidatos[c.nombre])
+            .map(c => c.nombre);
         candidatos.forEach(n => html += `<th>${n}</th>`);
         html += "</tr></thead><tbody>";
 
         comparacion.forEach(p => {
             html += `<tr><td>${p.pregunta}</td><td><strong>${escalaRespuesta[p.usuario]}</strong></td>`;
-            p.respuestasCandidatos.forEach(rc => {
-                const texto = escalaRespuesta[rc.respuesta];
-                const color = getColorMatch(p.usuario, rc.respuesta);
-                const fuente = rc.link ? ` <a href='${rc.link}' target='_blank'>📎</a>` : "";
-                html += `<td style='background:${color};'>${texto}${fuente}</td>`;
+            candidatos.forEach(nombreCandidato => {
+                const rc = p.respuestasCandidatos.find(r => r.nombre === nombreCandidato);
+                if (rc) {
+                    const texto = escalaRespuesta[rc.respuesta];
+                    const color = getColorMatch(p.usuario, rc.respuesta);
+                    const fuente = rc.link ? ` <a href='${rc.link}' target='_blank'>📎</a>` : "";
+                    html += `<td style='background:${color};'>${texto}${fuente}</td>`;
+                } else {
+                    html += `<td>N/A</td>`;
+                }
             });
             html += "</tr>";
         });
@@ -324,6 +421,12 @@
     }
 
     mostrarPregunta();
+
+    document.getElementById("btnReiniciar").onclick = function() {
+        respuestas = [];
+        preguntaActual = 0;
+        mostrarPregunta();
+    };
  
 </script>
 
