@@ -80,10 +80,11 @@
     ];
 
     const datosCandidatos = {
-        "Keiko Fujimori": { imagen: "../img/keiko.png", partido: "Fuerza Popular" },
-        "Martín Vizcarra": { imagen: "../img/vizcarra.png", partido: "Perú Primero" },
-        "César Acuña": { imagen: "../img/acuna.png", partido: "APP" },
-        "Rafael López Aliaga": { imagen: "../img/lopez.png", partido: "Renovación Popular" }
+        "Keiko Fujimori": { imagen: "./img/keiko.png", partido: "Fuerza Popular" },
+        "Martín Vizcarra": { imagen: "./img/vizcarra.png", partido: "Perú Primero" },
+        "César Acuña": { imagen: "./img/acuna.png", partido: "APP" },
+        "Rafael López Aliaga": { imagen: "./img/lopez.png", partido: "Renovación Popular" },
+        "Pedro Castillo": { imagen: "./img/castillo.png", partido: "Perú Libre" }
     };
 
     const escalaRespuesta = {
@@ -136,7 +137,7 @@
 
     async function enviarRespuestas() {
         const query = respuestas.join(",");
-        const endpoint = "https://script.google.com/macros/s/AKfycbxrHYuYRTjuVHqBoDnFCkQsK8RHTjsAwKyTQZfwfEu0Zttqgb0E2ZSkBTAmf54cyAbcjg/exec?respuestas=" + encodeURIComponent(query);
+        const endpoint = "https://script.google.com/macros/s/AKfycbwGh5XNFRepH8xflVGpgWfr_gudHJiL8kSw3sNvMbcD0FwvtLm38KzIQjAiBsXSx5z-lg/exec?respuestas=" + encodeURIComponent(query);
 
         try {
             const res = await fetch(endpoint);
@@ -182,14 +183,14 @@
             if (data.usuario && data.usuario.x !== undefined && data.usuario.y !== undefined) {
                 try {
                     // Guardar punto del usuario actual en la hoja "puntos"
-                    await fetch("https://script.google.com/macros/s/AKfycbxrHYuYRTjuVHqBoDnFCkQsK8RHTjsAwKyTQZfwfEu0Zttqgb0E2ZSkBTAmf54cyAbcjg/exec", {
+                    await fetch("https://script.google.com/macros/s/AKfycbwGh5XNFRepH8xflVGpgWfr_gudHJiL8kSw3sNvMbcD0FwvtLm38KzIQjAiBsXSx5z-lg/exec", {
                         method: "POST",
                         headers: { "Content-Type": "application/x-www-form-urlencoded" },
                         body: `accion=guardarPunto&x=${data.usuario.x}&y=${data.usuario.y}`
                     });
 
                     // Cargar puntos de otros usuarios
-                    const puntosRes = await fetch("https://script.google.com/macros/s/AKfycbxrHYuYRTjuVHqBoDnFCkQsK8RHTjsAwKyTQZfwfEu0Zttqgb0E2ZSkBTAmf54cyAbcjg/exec?accion=obtenerPuntos");
+                    const puntosRes = await fetch("https://script.google.com/macros/s/AKfycbwGh5XNFRepH8xflVGpgWfr_gudHJiL8kSw3sNvMbcD0FwvtLm38KzIQjAiBsXSx5z-lg/exec?accion=obtenerPuntos");
                     const puntosData = await puntosRes.json();
                     
                     if (puntosData && Array.isArray(puntosData.puntos)) {
@@ -263,7 +264,7 @@
         panel.style.display = "block";
 
         let html = `<h4>Comparación con <strong>${nombreCandidato}</strong></h4>`;
-        html += "<table><thead><tr><th>Pregunta</th><th>Vos</th><th>" + nombreCandidato + "</th></tr></thead><tbody>";
+        html += "<table><thead><tr><th>Pregunta</th><th>Tú</th><th>" + nombreCandidato + "</th></tr></thead><tbody>";
 
         comparacion.forEach(p => {
             const rCandidato = p.respuestasCandidatos.find(r => r.nombre === nombreCandidato);
